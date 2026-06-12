@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="TradePrediction" />
+  <title>TradePrediction</title>
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    body{font-family:'Inter','Helvetica Neue',Arial,sans-serif;background:#fff;max-width:430px;margin:0 auto;min-height:100vh;}
+    button{font-family:inherit;cursor:pointer;}
+    input,select{font-family:inherit;}
+    .clock{background:#000;color:#fff;padding:10px 16px;text-align:center;font-size:12px;letter-spacing:.5px;position:sticky;top:0;z-index:50;}
+    .back-btn{display:flex;align-items:center;gap:5px;background:none;border:none;font-size:15px;font-weight:700;color:#111;padding:12px 16px;border-bottom:1px solid #f3f4f6;width:100%;text-align:left;}
+    .content{padding-bottom:72px;overflow-y:auto;}
+    .bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#fff;border-top:1px solid #e5e7eb;display:flex;z-index:100;}
+    .nav-btn{flex:1;background:none;border:none;padding:10px 0 8px;display:flex;flex-direction:column;align-items:center;gap:2px;position:relative;}
+    .nav-icon{font-size:20px;}
+    .nav-label{font-size:10px;color:#9ca3af;}
+    .nav-label.active{color:#000;font-weight:700;}
+    .nav-indicator{position:absolute;top:0;left:25%;right:25%;height:2px;background:#000;border-radius:0 0 2px 2px;}
+    .nav-badge{position:absolute;top:6px;right:20%;background:#dc2626;color:#fff;border-radius:10px;font-size:9px;padding:1px 5px;font-weight:700;}
+    .toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:#111;color:#fff;border-radius:8px;padding:10px 16px;font-size:13px;z-index:999;max-width:380px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.2);display:none;}
+    .card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;margin:4px 0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;}
+    .section-label{font-size:11px;font-weight:700;color:#6b7280;letter-spacing:1px;text-transform:uppercase;margin:12px 0 6px;}
+    .win{background:#f0fdf4;border-color:#bbf7d0;}
+    .loss{background:#fef2f2;border-color:#fecaca;}
+    .green{color:#16a34a;}
+    .red{color:#dc2626;}
+    input[type=number],input[type=date],select{width:100%;padding:12px 14px;border:1px solid #e5e7eb;border-radius:10px;font-size:16px;outline:none;}
+    select{padding:8px 10px;font-size:13px;}
+    .primary-btn{width:100%;padding:16px 0;background:#000;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;}
+    .primary-btn:disabled{background:#e5e7eb;color:#9ca3af;cursor:not-allowed;}
+    .dir-btn{flex:1;padding:16px 0;border:2px solid #e5e7eb;border-radius:10px;font-size:18px;font-weight:800;}
+    .dir-btn.up{color:#16a34a;}
+    .dir-btn.up.active{border-color:#16a34a;background:#f0fdf4;}
+    .dir-btn.down{color:#dc2626;}
+    .dir-btn.down.active{border-color:#dc2626;background:#fef2f2;}
+    .loading{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px;}
+  </style>
+</head>
+<body>
+
+<div class="clock" id="clock">Loading...</div>
+<div id="back-bar" style="display:none">
+  <button class="back-btn" id="back-btn"><span style="font-size:20px">‹</span> <span id="back-label">Home</span></button>
+</div>
+<div class="content" id="content">
+  <div class="loading"><div style="font-size:32px">⏳</div><div style="font-size:16px;font-weight:700">Loading TradePrediction...</div></div>
+</div>
+<div class="bottom-nav" id="bottom-nav">
+  <button class="nav-btn" onclick="navTo('home')"><span class="nav-icon">⊞</span><span class="nav-label" id="nl-home">Home</span></button>
+  <button class="nav-btn" onclick="navTo('markets')"><span class="nav-icon">📈</span><span class="nav-label" id="nl-markets">Markets</span></button>
+  <button class="nav-btn" onclick="navTo('trade')"><span class="nav-icon">⚡</span><span class="nav-label" id="nl-trade">Trade</span></button>
+  <button class="nav-btn" onclick="navTo('positions')" style="position:relative"><span class="nav-icon">📂</span><span class="nav-label" id="nl-positions">Open</span><span class="nav-badge" id="trade-badge" style="display:none">0</span></button>
+  <button class="nav-btn" onclick="navTo('history')"><span class="nav-icon">📊</span><span class="nav-label" id="nl-history">P&L</span></button>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+const INDICES=[
+  {id:"FTSE",name:"FTSE 100",unit:"Units",close:"16:30",flag:"🇬🇧"},
+  {id:"DAX", name:"DAX 40",  unit:"Units",close:"17:30",flag:"🇩🇪"},
+  {id:"CAC", name:"CAC 40",  unit:"Units",close:"17:30",flag:"🇫🇷"},
+  {id:"SPX", name:"S&P 500", unit:"Units",close:"16:00",flag:"🇺🇸"},
+  {id:"ASX", name:"ASX 200", unit:"Units",close:"16:00",flag:"🇦🇺"},
+  {id:"NKY", name:"Nikkei",  unit:"Units",close:"15:30",flag:"🇯🇵"},
+];
+const COMMODITIES=[
+  {id:"GOLD",  name:"Gold",        unit:"Contracts",close:"13:30",flag:"🥇"},
+  {id:"SILVER",name:"Silver",      unit:"Contracts",close:"13:29",flag:"🥈"},
+  {id:"BRENT", name:"Brent Crude", unit:"Contracts",close:"19:30",flag:"🛢️"},
+  {id:"WTI",   name:"WTI Crude",   unit:"Contracts",close:"14:30",flag:"⛽"},
+];
+const ALL=[...INDICES,...COMMODITIES];
+const INITIAL=1000000;
+const BASE={FTSE:8245.5,DAX:18732.2,CAC:7654.3,SPX:5423.8,ASX:7823.4,NKY:38654,GOLD:2341.5,SILVER:29.85,BRENT:82.4,WTI:78.2};
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let balances={}, trades=[], history=[], prices={};
+let stack=[{id:"home"}];
+let predDirection=null, stakeInput="", unitsInput="1";
+let perfAsset=ALL[0].id, perfFrom="", perfTo="", perfResult=null;
+
+// ── Storage ───────────────────────────────────────────────────────────────────
+function save(key,val){try{localStorage.setItem('tp_'+key,JSON.stringify(val));}catch(e){}}
+function load(key,def){try{const v=localStorage.getItem('tp_'+key);return v?JSON.parse(v):def;}catch(e){return def;}}
+
+function initBalances(){const b={};ALL.forEach(a=>{b[a.id]=INITIAL;});return b;}
+
+function loadData(){
+  balances=load('balances',initBalances());
+  trades=load('trades',[]);
+  history=load('history',[]);
+}
+
+// ── Prices ────────────────────────────────────────────────────────────────────
+function genHistory(base){
+  const h=[];let price=base*(0.97+Math.random()*0.06);
+  const today=new Date();
+  for(let i=9;i>=0;i--){
+    const change=(Math.random()-0.48)*base*0.012;
+    price=Math.max(price+change,base*0.85);
+    const d=new Date(today);d.setDate(today.getDate()-i);
+    if(d.getDay()===0)d.setDate(d.getDate()-2);
+    if(d.getDay()===6)d.setDate(d.getDate()-1);
+    h.push({price:parseFloat(price.toFixed(2)),date:d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})});
+  }
+  return h;
+}
+
+function initPrices(){
+  ALL.forEach(a=>{
+    const base=BASE[a.id];
+    prices[a.id]={current:parseFloat((base*(0.998+Math.random()*0.004)).toFixed(2)),history:genHistory(base),change:parseFloat(((Math.random()-0.48)*1.2).toFixed(2))};
+  });
+}
+
+function tickPrices(){
+  ALL.forEach(a=>{
+    const tick=(Math.random()-0.499)*BASE[a.id]*0.0008;
+    const np=parseFloat((prices[a.id].current+tick).toFixed(2));
+    const pct=parseFloat((((np-prices[a.id].history[0].price)/prices[a.id].history[0].price)*100).toFixed(2));
+    prices[a.id]={...prices[a.id],current:np,change:pct};
+  });
+  renderCurrent();
+}
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+const fmt=n=>n!=null?n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+const fmtCcy=n=>'$'+fmt(n);
+const pnlColor=n=>n>=0?'#16a34a':'#dc2626';
+
+// ── Clock ─────────────────────────────────────────────────────────────────────
+function updateClock(){
+  document.getElementById('clock').textContent=new Date().toLocaleString('en-GB',{timeZone:'Europe/London',weekday:'long',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' GMT/BST';
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.display='block';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.style.display='none';},4000);
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function push(s){stack.push(s);render();}
+function goBack(){if(stack.length>1){stack.pop();render();}}
+function navTo(id){
+  predDirection=null;stakeInput='';unitsInput='1';
+  stack=id==='home'?[{id:'home'}]:[{id:'home'},{id}];
+  render();
+}
+
+function updateNav(){
+  const cur=stack[stack.length-1];
+  const activeId=cur.id==='home'?'home':cur.id==='assetDetail'?(stack[stack.length-2]?.id==='markets'?'markets':'home'):cur.id;
+  ['home','markets','trade','positions','history'].forEach(id=>{
+    const el=document.getElementById('nl-'+id);
+    if(el)el.className='nav-label'+(activeId===id?' active':'');
+  });
+  // badge
+  const badge=document.getElementById('trade-badge');
+  if(trades.length>0){badge.style.display='block';badge.textContent=trades.length;}
+  else badge.style.display='none';
+  // back button
+  const canBack=stack.length>1;
+  document.getElementById('back-bar').style.display=canBack?'block':'none';
+  if(canBack){
+    const prev=stack[stack.length-2];
+    const labels={home:'Home',markets:'Markets',trade:'Trade',positions:'Open',history:'P&L'};
+    document.getElementById('back-label').textContent=labels[prev.id]||'Back';
+  }
+}
+
+// ── Sparkline SVG ─────────────────────────────────────────────────────────────
+function sparklineSVG(hist,color){
+  if(!hist?.length)return'';
+  const pp=hist.map(h=>h.price);
+  const min=Math.min(...pp),max=Math.max(...pp),range=max-min||1;
+  const w=80,h=32,pad=4;
+  const pts=pp.map((p,i)=>{
+    const x=pad+(i/(pp.length-1))*(w-2*pad);
+    const y=h-pad-((p-min)/range)*(h-2*pad);
+    return x+','+y;
+  }).join(' ');
+  return`<svg width="${w}" height="${h}"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+}
+
+// ── 5-Day Chart SVG ───────────────────────────────────────────────────────────
+function chartSVG(hist){
+  if(!hist?.length)return'';
+  const pp=hist.slice(-5).map(h=>h.price);
+  const min=Math.min(...pp)*0.999,max=Math.max(...pp)*1.001,range=max-min||1;
+  const W=320,H=120,pL=60,pR=12,pT=12,pB=28,iW=W-pL-pR,iH=H-pT-pB;
+  const toX=i=>pL+(i/(pp.length-1))*iW;
+  const toY=p=>pT+iH-((p-min)/range)*iH;
+  const pts=pp.map((p,i)=>toX(i)+','+toY(p)).join(' ');
+  const days=['5d ago','4d ago','3d ago','2d ago','Today'];
+  const isUp=pp[pp.length-1]>=pp[0];
+  const lc=isUp?'#16a34a':'#dc2626';
+  const ticks=[min,(min+max)/2,max];
+  let svg=`<svg width="100%" viewBox="0 0 ${W} ${H}">`;
+  ticks.forEach(v=>{const y=toY(v);svg+=`<line x1="${pL}" y1="${y}" x2="${W-pR}" y2="${y}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,3"/><text x="${pL-4}" y="${y+4}" text-anchor="end" font-size="9" fill="#6b7280">${fmt(v)}</text>`;});
+  svg+=`<polyline points="${pts}" fill="none" stroke="${lc}" stroke-width="2" stroke-linejoin="round"/>`;
+  pp.forEach((p,i)=>{svg+=`<circle cx="${toX(i)}" cy="${toY(p)}" r="3" fill="${lc}"/>`;});
+  days.forEach((d,i)=>{svg+=`<text x="${toX(i)}" y="${H-6}" text-anchor="middle" font-size="9" fill="#6b7280">${d}</text>`;});
+  svg+='</svg>';
+  return svg;
+}
+
+// ── Screens ───────────────────────────────────────────────────────────────────
+function screenHome(){
+  const total=Object.values(balances).reduce((s,b)=>s+b,0);
+  const pnl=total-ALL.length*INITIAL;
+  let html=`<div style="padding:16px">
+    <p style="font-size:12px;font-weight:600;color:#6b7280;margin:0 0 4px;letter-spacing:1px;text-transform:uppercase">Total Portfolio</p>
+    <div style="font-size:36px;font-weight:800;letter-spacing:-1px;margin:0 0 2px">${fmtCcy(total)}</div>
+    <div style="font-size:13px;font-weight:600;color:${pnlColor(pnl)};margin-bottom:4px">Overall P&amp;L: ${pnl>=0?'+':''}${fmtCcy(pnl)}</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:20px">${trades.length} open position${trades.length!==1?'s':''}</div>
+    <p class="section-label">Indices</p>`;
+  INDICES.forEach(a=>{html+=assetRow(a);});
+  html+=`<p class="section-label" style="margin-top:16px">Commodities</p>`;
+  COMMODITIES.forEach(a=>{html+=assetRow(a);});
+  html+=`<div style="margin-top:24px;padding-top:16px;border-top:1px solid #f3f4f6;text-align:center">
+    <button onclick="resetConfirm()" style="background:none;border:1px solid #e5e7eb;border-radius:8px;padding:8px 20px;font-size:12px;color:#9ca3af;cursor:pointer">Reset Platform</button>
+  </div></div>`;
+  return html;
+}
+
+function assetRow(a){
+  const p=prices[a.id];const isUp=p?.change>=0;
+  const pnl=balances[a.id]-INITIAL;
+  return`<button class="card" onclick="push({id:'assetDetail',assetId:'${a.id}'})">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:20px">${a.flag}</span>
+      <div><div style="font-size:13px;font-weight:700">${a.name}</div>
+      <div style="font-size:11px;font-weight:600;color:${pnlColor(pnl)}">${pnl>=0?'+':''}${fmtCcy(pnl)}</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      ${sparklineSVG(p?.history,isUp?'#16a34a':'#dc2626')}
+      <div style="text-align:right">
+        <div style="font-size:13px;font-weight:800">${fmtCcy(balances[a.id])}</div>
+        <div style="font-size:11px;font-weight:600;color:${isUp?'#16a34a':'#dc2626'}">${isUp?'▲':'▼'} ${Math.abs(p?.change??0)}%</div>
+      </div>
+    </div>
+  </button>`;
+}
+
+function screenAssetDetail(assetId){
+  const a=ALL.find(x=>x.id===assetId);
+  const p=prices[assetId];const isUp=p?.change>=0;
+  const pnl=balances[assetId]-INITIAL;
+  let tenDay=`<div style="background:#f9fafb;border-radius:12px;padding:14px;margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">10-Day Price History</div>
+    <div style="display:flex;justify-content:space-between;border-bottom:1px solid #e5e7eb;padding-bottom:6px;margin-bottom:4px">
+      <span style="font-size:11px;font-weight:700;color:#9ca3af;flex:1">Date</span>
+      <span style="font-size:11px;font-weight:700;color:#9ca3af;text-align:right;flex:1">Close/Settlement</span>
+      <span style="font-size:11px;font-weight:700;color:#9ca3af;text-align:right;min-width:80px">Move</span>
+    </div>`;
+  const hist=[...(p?.history??[])].reverse();
+  hist.forEach((entry,i)=>{
+    const prev=hist[i+1];
+    const up=prev?entry.price>=prev.price:null;
+    const diff=prev?entry.price-prev.price:null;
+    tenDay+=`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:${i<hist.length-1?'1px solid #f3f4f6':'none'}">
+      <span style="font-size:12px;color:${i===0?'#111':'#6b7280'};font-weight:${i===0?700:400};flex:1">${i===0?'Today':entry.date}</span>
+      <span style="font-size:13px;font-weight:${i===0?800:600};text-align:right;flex:1">${fmt(entry.price)}</span>
+      <span style="font-size:12px;font-weight:600;text-align:right;min-width:80px;color:${up===null?'#9ca3af':up?'#16a34a':'#dc2626'}">${up===null?'—':(up?'▲':'▼')+' '+fmt(Math.abs(diff))}</span>
+    </div>`;
+  });
+  tenDay+='</div>';
+
+  return`<div style="padding:16px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="font-size:32px">${a?.flag}</span>
+      <div><h2 style="font-size:20px;font-weight:800;margin:0">${a?.name}</h2>
+      <div style="font-size:12px;color:#6b7280">${a?.unit} · Settles ${a?.close}</div></div>
+    </div>
+    <div style="background:#f9fafb;border-radius:12px;padding:14px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Balance</div>
+      <div style="font-size:22px;font-weight:800">${fmtCcy(balances[assetId])}</div></div>
+      <div style="text-align:right"><div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">P&amp;L</div>
+      <div style="font-size:16px;font-weight:700;color:${pnlColor(pnl)}">${pnl>=0?'+':''}${fmtCcy(pnl)}</div></div>
+    </div>
+    <div style="background:#f9fafb;border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div><div style="font-size:28px;font-weight:800">${fmt(p?.current)}</div>
+        <div style="font-size:13px;font-weight:600;color:${isUp?'#16a34a':'#dc2626'}">${isUp?'▲':'▼'} ${Math.abs(p?.change??0)}%</div></div>
+        <div style="font-size:11px;color:#9ca3af">5-Day Chart</div>
+      </div>
+      ${chartSVG(p?.history)}
+    </div>
+    ${tenDay}
+    <button class="primary-btn" onclick="push({id:'trade',step:'form',assetId:'${assetId}'})">Trade ${a?.name}</button>
+  </div>`;
+}
+
+function screenMarkets(){
+  let html=`<div style="padding:16px"><h2 style="font-size:18px;font-weight:800;margin:0 0 4px">Markets</h2>
+    <p style="font-size:12px;color:#6b7280;margin:0 0 16px">Tap an asset to view details</p>
+    <p class="section-label">Indices</p>`;
+  INDICES.forEach(a=>{
+    const p=prices[a.id];const isUp=p?.change>=0;
+    html+=`<button style="display:flex;align-items:center;width:100%;background:none;border:none;border-bottom:1px solid #f3f4f6;padding:12px 0;cursor:pointer;gap:12px" onclick="push({id:'assetDetail',assetId:'${a.id}'})">
+      <span style="font-size:22px;min-width:30px">${a.flag}</span>
+      <div style="flex:1;text-align:left"><div style="font-size:14px;font-weight:700">${a.name}</div>
+      <div style="font-size:11px;color:#9ca3af">Settles ${a.close} · ${a.unit}</div></div>
+      ${sparklineSVG(p?.history,isUp?'#16a34a':'#dc2626')}
+      <div style="text-align:right;min-width:70px"><div style="font-size:14px;font-weight:700">${fmt(p?.current)}</div>
+      <div style="font-size:12px;font-weight:600;color:${isUp?'#16a34a':'#dc2626'}">${isUp?'▲':'▼'} ${Math.abs(p?.change??0)}%</div></div>
+    </button>`;
+  });
+  html+=`<p class="section-label" style="margin-top:16px">Commodities</p>`;
+  COMMODITIES.forEach(a=>{
+    const p=prices[a.id];const isUp=p?.change>=0;
+    html+=`<button style="display:flex;align-items:center;width:100%;background:none;border:none;border-bottom:1px solid #f3f4f6;padding:12px 0;cursor:pointer;gap:12px" onclick="push({id:'assetDetail',assetId:'${a.id}'})">
+      <span style="font-size:22px;min-width:30px">${a.flag}</span>
+      <div style="flex:1;text-align:left"><div style="font-size:14px;font-weight:700">${a.name}</div>
+      <div style="font-size:11px;color:#9ca3af">Settles ${a.close} · ${a.unit}</div></div>
+      ${sparklineSVG(p?.history,isUp?'#16a34a':'#dc2626')}
+      <div style="text-align:right;min-width:70px"><div style="font-size:14px;font-weight:700">${fmt(p?.current)}</div>
+      <div style="font-size:12px;font-weight:600;color:${isUp?'#16a34a':'#dc2626'}">${isUp?'▲':'▼'} ${Math.abs(p?.change??0)}%</div></div>
+    </button>`;
+  });
+  html+='</div>';
+  return html;
+}
+
+function screenTradeSelect(){
+  let html=`<div style="padding:16px"><h2 style="font-size:18px;font-weight:800;margin:0 0 4px">Place a Trade</h2>
+    <p style="font-size:12px;color:#6b7280;margin:0 0 16px">Select an asset:</p>
+    <p class="section-label">Indices</p>`;
+  INDICES.forEach(a=>{
+    html+=`<button class="card" onclick="push({id:'trade',step:'form',assetId:'${a.id}'})">
+      <span style="font-size:14px;font-weight:600">${a.flag} ${a.name}</span>
+      <div style="text-align:right"><div style="font-size:14px;font-weight:700">${fmt(prices[a.id]?.current)}</div>
+      <div style="font-size:11px;color:#6b7280">Bal: ${fmtCcy(balances[a.id])}</div></div>
+    </button>`;
+  });
+  html+=`<p class="section-label" style="margin-top:16px">Commodities</p>`;
+  COMMODITIES.forEach(a=>{
+    html+=`<button class="card" onclick="push({id:'trade',step:'form',assetId:'${a.id}'})">
+      <span style="font-size:14px;font-weight:600">${a.flag} ${a.name}</span>
+      <div style="text-align:right"><div style="font-size:14px;font-weight:700">${fmt(prices[a.id]?.current)}</div>
+      <div style="font-size:11px;color:#6b7280">Bal: ${fmtCcy(balances[a.id])}</div></div>
+    </button>`;
+  });
+  return html+'</div>';
+}
+
+function screenTradeForm(assetId){
+  const a=ALL.find(x=>x.id===assetId);
+  const p=prices[assetId];const isUp=p?.change>=0;
+  const bal=balances[assetId];
+  const upActive=predDirection==='UP';const downActive=predDirection==='DOWN';
+  const stakeNum=parseFloat(stakeInput)||0;
+  const canSubmit=predDirection&&stakeNum>0&&stakeNum<=bal&&parseFloat(unitsInput)>0;
+  return`<div style="padding:16px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="font-size:28px">${a?.flag}</span>
+      <div><h2 style="font-size:18px;font-weight:800;margin:0">${a?.name}</h2>
+      <div style="font-size:12px;color:#6b7280">${a?.unit} · Settles ${a?.close}</div></div>
+    </div>
+    <div style="background:#f9fafb;border-radius:10px;padding:10px 14px;margin-bottom:12px;display:flex;justify-content:space-between">
+      <span style="font-size:12px;color:#6b7280">Available Balance</span>
+      <span style="font-size:13px;font-weight:700">${fmtCcy(bal)}</span>
+    </div>
+    <div style="background:#f9fafb;border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div><div style="font-size:26px;font-weight:800">${fmt(p?.current)}</div>
+        <div style="font-size:13px;font-weight:600;color:${isUp?'#16a34a':'#dc2626'}">${isUp?'▲':'▼'} ${Math.abs(p?.change??0)}%</div></div>
+        <div style="font-size:11px;color:#9ca3af">5-Day History</div>
+      </div>${chartSVG(p?.history)}
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:8px">Your Prediction</label>
+      <div style="display:flex;gap:10px">
+        <button class="dir-btn up ${upActive?'active':''}" onclick="setDir('UP')" id="btn-up">▲ UP</button>
+        <button class="dir-btn down ${downActive?'active':''}" onclick="setDir('DOWN')" id="btn-down">▼ DOWN</button>
+      </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">${a?.unit}</label>
+      <input type="number" min="1" value="${unitsInput}" oninput="unitsInput=this.value" placeholder="Number of ${a?.unit}" />
+    </div>
+    <div style="margin-bottom:4px">
+      <label style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px">Stake (USD)</label>
+      <input type="number" min="1" max="${bal}" value="${stakeInput}" oninput="stakeInput=this.value;updateSubmitBtn('${assetId}')" placeholder="Enter stake amount" />
+    </div>
+    <div style="font-size:11px;color:#9ca3af;margin-bottom:16px">Max stake: ${fmtCcy(bal)}</div>
+    <button class="primary-btn" id="submit-btn" onclick="submitTrade('${assetId}')" ${canSubmit?'':'disabled'}>
+      ${canSubmit?`Place ${predDirection} Trade · ${fmtCcy(stakeNum)}`:'Complete all fields'}
+    </button>
+  </div>`;
+}
+
+function setDir(d){
+  predDirection=d;
+  const cur=stack[stack.length-1];
+  if(cur.id==='trade'&&cur.step==='form'){
+    const ub=document.getElementById('btn-up');
+    const db=document.getElementById('btn-down');
+    if(ub){ub.className='dir-btn up'+(d==='UP'?' active':'');}
+    if(db){db.className='dir-btn down'+(d==='DOWN'?' active':'');}
+    updateSubmitBtn(cur.assetId);
+  }
+}
+
+function updateSubmitBtn(assetId){
+  const btn=document.getElementById('submit-btn');
+  if(!btn)return;
+  const stakeNum=parseFloat(stakeInput)||0;
+  const bal=balances[assetId];
+  const canSubmit=predDirection&&stakeNum>0&&stakeNum<=bal&&parseFloat(unitsInput)>0;
+  btn.disabled=!canSubmit;
+  btn.textContent=canSubmit?`Place ${predDirection} Trade · ${fmtCcy(stakeNum)}`:'Complete all fields';
+}
+
+function submitTrade(assetId){
+  const stake=parseFloat(stakeInput),units=parseFloat(unitsInput);
+  if(!predDirection){showToast('Choose UP or DOWN');return;}
+  if(isNaN(stake)||stake<=0||stake>balances[assetId]){showToast('Invalid stake amount');return;}
+  if(isNaN(units)||units<=0){showToast('Invalid units/contracts');return;}
+  const a=ALL.find(x=>x.id===assetId);
+  const trade={id:Date.now(),assetId,assetName:a.name,unit:a.unit,direction:predDirection,stake,units,entryPrice:prices[assetId]?.current,openedAt:Date.now(),settleAt:Date.now()+30000};
+  trades.unshift(trade);
+  balances[assetId]-=stake;
+  save('balances',balances);save('trades',trades);
+  predDirection=null;stakeInput='';unitsInput='1';
+  stack=[{id:'home'},{id:'positions'}];
+  showToast(`Trade opened: ${a.name} ${trade.direction} | Stake: ${fmtCcy(stake)}`);
+  render();
+}
+
+function screenPositions(){
+  if(!trades.length)return`<div style="padding:32px;text-align:center"><div style="font-size:40px;margin-bottom:12px">📂</div><div style="font-size:16px;font-weight:700;margin-bottom:6px">No open positions</div><div style="font-size:13px;color:#6b7280">Head to Trade to place a prediction.</div></div>`;
+  let html=`<div style="padding:16px"><h2 style="font-size:18px;font-weight:800;margin:0 0 4px">Open Positions</h2>
+    <p style="font-size:12px;color:#6b7280;margin:0 0 16px">${trades.length} active trade${trades.length!==1?'s':''}</p>
+    <div style="display:flex;flex-direction:column;gap:10px">`;
+  trades.forEach(t=>{
+    const cur=prices[t.assetId]?.current??t.entryPrice;
+    const winning=t.direction==='UP'?cur>t.entryPrice:cur<t.entryPrice;
+    const diff=cur-t.entryPrice;
+    const pct=((Math.abs(diff)/t.entryPrice)*100).toFixed(2);
+    const a=ALL.find(x=>x.id===t.assetId);
+    html+=`<div style="border:1px solid ${winning?'#bbf7d0':'#fecaca'};border-radius:12px;padding:14px;background:${winning?'#f0fdf4':'#fef2f2'}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div style="font-size:15px;font-weight:800">${a?.flag} ${t.assetName}</div>
+        <div style="font-size:12px;color:#6b7280">${t.units} ${t.unit}</div></div>
+        <span style="font-size:13px;font-weight:800;color:${t.direction==='UP'?'#16a34a':'#dc2626'};background:${t.direction==='UP'?'#dcfce7':'#fee2e2'};padding:2px 8px;border-radius:6px">${t.direction==='UP'?'▲ UP':'▼ DOWN'}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#374151;margin-bottom:10px">
+        <span>Entry: <strong>${fmt(t.entryPrice)}</strong></span>
+        <span>Now: <strong>${fmt(cur)}</strong></span>
+        <span style="color:${winning?'#16a34a':'#dc2626'}">${diff>0?'+':''}${fmt(diff)} (${pct}%)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px">Stake: <strong>${fmtCcy(t.stake)}</strong></span>
+        <button onclick="closeTrade(${t.id})" style="background:#000;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">Close Trade</button>
+      </div>
+    </div>`;
+  });
+  return html+'</div></div>';
+}
+
+function closeTrade(id){
+  const idx=trades.findIndex(t=>t.id===id);
+  if(idx===-1)return;
+  const t=trades[idx];
+  const cur=prices[t.assetId]?.current??t.entryPrice;
+  const won=t.direction==='UP'?cur>t.entryPrice:cur<t.entryPrice;
+  const pnl=won?t.stake:-t.stake;
+  balances[t.assetId]+=t.stake+pnl;
+  const settled={...t,exitPrice:cur,pnl,settledAt:Date.now(),status:won?'WIN':'LOSS',earlyClosed:true};
+  history.unshift(settled);
+  trades.splice(idx,1);
+  save('balances',balances);save('trades',trades);save('history',history);
+  showToast(`Closed: ${t.assetName} → ${pnl>0?'WIN +':'LOSS '}${fmtCcy(Math.abs(pnl))}`);
+  render();
+}
+
+function screenHistory(){
+  let assetOpts='<optgroup label="Indices">';
+  INDICES.forEach(a=>{assetOpts+=`<option value="${a.id}"${perfAsset===a.id?' selected':''}>${a.flag} ${a.name}</option>`;});
+  assetOpts+='</optgroup><optgroup label="Commodities">';
+  COMMODITIES.forEach(a=>{assetOpts+=`<option value="${a.id}"${perfAsset===a.id?' selected':''}>${a.flag} ${a.name}</option>`;});
+  assetOpts+='</optgroup>';
+
+  let resultHtml='';
+  if(perfResult){
+    const assetName=ALL.find(a=>a.id===perfAsset)?.name??'';
+    const isProfit=perfResult.pnl>=0;
+    resultHtml=`<div style="margin-top:12px;padding:14px;background:#fff;border-radius:8px;border:2px solid ${isProfit?'#bbf7d0':'#fecaca'};background:${isProfit?'#f0fdf4':'#fef2f2'}">
+      <div style="font-size:12px;color:#6b7280;margin-bottom:10px;text-align:center">${assetName} · ${perfResult.count} trade${perfResult.count!==1?'s':''}</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid ${isProfit?'#bbf7d0':'#fecaca'}">
+        <div style="text-align:center;flex:1">
+          <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Opening Balance</div>
+          <div style="font-size:14px;font-weight:700">${fmtCcy(perfResult.openingBalance)}</div>
+        </div>
+        <div style="text-align:center;flex:1">
+          <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Closing Balance</div>
+          <div style="font-size:14px;font-weight:700">${fmtCcy(perfResult.closingBalance)}</div>
+        </div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${isProfit?'✅ PROFIT':'❌ LOSS'}</div>
+        <div style="font-size:28px;font-weight:800;color:${isProfit?'#16a34a':'#dc2626'}">${isProfit?'+':''}${fmtCcy(perfResult.pnl)}</div>
+        <div style="font-size:16px;font-weight:700;color:${isProfit?'#16a34a':'#dc2626'}">${isProfit?'+':''}${perfResult.pct}%</div>
+      </div>
+    </div>`;}
+
+  let histHtml=history.length?'':'<div style="text-align:center;color:#9ca3af;font-size:14px;padding:32px">No settled trades yet.</div>';
+  history.forEach(t=>{
+    const a=ALL.find(x=>x.id===t.assetId);
+    histHtml+=`<div style="border:1px solid ${t.status==='WIN'?'#bbf7d0':'#fecaca'};border-radius:10px;padding:12px;background:${t.status==='WIN'?'#f0fdf4':'#fef2f2'};margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:14px;font-weight:700">${a?.flag} ${t.assetName}</span>
+        <span style="font-size:13px;font-weight:800;color:${t.status==='WIN'?'#16a34a':'#dc2626'}">${t.status} ${t.pnl>=0?'+':''}${fmtCcy(t.pnl)}</span>
+      </div>
+      <div style="font-size:11px;color:#6b7280;display:flex;gap:12px;flex-wrap:wrap">
+        <span>${t.direction==='UP'?'▲ UP':'▼ DOWN'}</span>
+        <span>Stake: ${fmtCcy(t.stake)}</span>
+        <span>${new Date(t.settledAt).toLocaleDateString('en-GB')}</span>
+        ${t.earlyClosed?'<span style="color:#f59e0b">Early close</span>':''}
+      </div>
+    </div>`;
+  });
+
+  return`<div style="padding:16px">
+    <h2 style="font-size:18px;font-weight:800;margin:0 0 16px">P&L</h2>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Calculate Performance</div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;color:#6b7280;display:block;margin-bottom:4px">Asset</label>
+        <select onchange="perfAsset=this.value;perfResult=null" style="border-radius:8px;border:1px solid #e5e7eb;padding:8px 10px;font-size:13px;width:100%">${assetOpts}</select>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="flex:1"><label style="font-size:11px;color:#6b7280;display:block;margin-bottom:4px">From</label>
+        <input type="date" value="${perfFrom}" onchange="perfFrom=this.value" style="padding:8px 10px;border-radius:8px;font-size:13px;border:1px solid #e5e7eb;width:100%"/></div>
+        <div style="flex:1"><label style="font-size:11px;color:#6b7280;display:block;margin-bottom:4px">To</label>
+        <input type="date" value="${perfTo}" onchange="perfTo=this.value" style="padding:8px 10px;border-radius:8px;font-size:13px;border:1px solid #e5e7eb;width:100%"/></div>
+      </div>
+      <button onclick="calcPerf()" style="width:100%;padding:10px 0;background:#000;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">Calculate</button>
+      ${resultHtml}
+    </div>
+    <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Trade History</div>
+    ${histHtml}
+  </div>`;
+}
+
+function calcPerf(){
+  if(!perfFrom||!perfTo)return;
+  const from=new Date(perfFrom).getTime();
+  const to=new Date(perfTo).getTime()+86400000;
+  const filtered=history.filter(t=>t.assetId===perfAsset&&t.settledAt>=from&&t.settledAt<=to);
+  const pnl=filtered.reduce((s,t)=>s+t.pnl,0);
+  const closingBalance=balances[perfAsset];
+  const openingBalance=closingBalance-pnl;
+  const pct=openingBalance>0?((pnl/openingBalance)*100).toFixed(2):0;
+  perfResult={count:filtered.length,pnl,openingBalance,closingBalance,pct};
+  render();
+}
+
+function resetConfirm(){
+  if(confirm('Reset all balances and trade history? This cannot be undone.')){
+    balances=initBalances();trades=[];history=[];
+    save('balances',balances);save('trades',trades);save('history',history);
+    stack=[{id:'home'}];
+    showToast('Platform reset — all balances restored to $1,000,000');
+    render();
+  }
+}
+
+// ── Auto-settle ───────────────────────────────────────────────────────────────
+function autoSettle(){
+  const now=Date.now();
+  const remaining=[];let changed=false;
+  trades.forEach(t=>{
+    if(now>=t.settleAt){
+      const cur=prices[t.assetId]?.current??t.entryPrice;
+      const won=t.direction==='UP'?cur>t.entryPrice:cur<t.entryPrice;
+      const pnl=won?t.stake:-t.stake;
+      balances[t.assetId]+=t.stake+pnl;
+      history.unshift({...t,exitPrice:cur,pnl,settledAt:now,status:won?'WIN':'LOSS'});
+      showToast(`${t.assetName} → ${pnl>0?'WIN +':'LOSS '}${fmtCcy(Math.abs(pnl))}`);
+      changed=true;
+    } else remaining.push(t);
+  });
+  if(changed){
+    trades=remaining;
+    save('balances',balances);save('trades',trades);save('history',history);
+    render();
+  }
+}
+
+// ── Main Render ───────────────────────────────────────────────────────────────
+function render(){
+  updateNav();
+  const cur=stack[stack.length-1];
+  let html='';
+  if(cur.id==='home') html=screenHome();
+  else if(cur.id==='assetDetail') html=screenAssetDetail(cur.assetId);
+  else if(cur.id==='markets') html=screenMarkets();
+  else if(cur.id==='trade'&&cur.step==='select') html=screenTradeSelect();
+  else if(cur.id==='trade'&&cur.step==='form') html=screenTradeForm(cur.assetId);
+  else if(cur.id==='positions') html=screenPositions();
+  else if(cur.id==='history') html=screenHistory();
+  document.getElementById('content').innerHTML=html;
+}
+
+function renderCurrent(){
+  const cur=stack[stack.length-1];
+  // only re-render price-sensitive screens silently
+  if(['home','markets','positions'].includes(cur.id)||(cur.id==='assetDetail')||(cur.id==='trade'&&cur.step==='form')){
+    render();
+  }
+}
+
+// ── Service Worker ────────────────────────────────────────────────────────────
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+loadData();
+initPrices();
+document.getElementById('back-btn').addEventListener('click',goBack);
+updateClock();
+setInterval(updateClock,1000);
+setInterval(tickPrices,3000);
+setInterval(autoSettle,5000);
+render();
+</script>
+</body>
+</html>
